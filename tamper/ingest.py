@@ -22,6 +22,8 @@ from .utils import pil_to_cv
 _AADHAAR_RE = re.compile(r"\b\d{4}\s?\d{4}\s?\d{4}\b")
 _PAN_RE = re.compile(r"\b[A-Z]{5}[0-9]{4}[A-Z]\b")
 _DL_HINT_RE = re.compile(r"driving|licence|license|\bDL\b", re.IGNORECASE)
+_PASSPORT_HINT_RE = re.compile(r"passport|republic of india|nationality",
+                               re.IGNORECASE)
 
 
 @dataclass
@@ -42,6 +44,8 @@ def infer_doc_type(text: str, fields: dict) -> Optional[str]:
         return "aadhaar"
     if fields.get("pan") or _PAN_RE.search(text or ""):
         return "pan"
+    if fields.get("passport") or _PASSPORT_HINT_RE.search(text or ""):
+        return "passport"
     if fields.get("dl") or _DL_HINT_RE.search(text or ""):
         return "dl"
     return None

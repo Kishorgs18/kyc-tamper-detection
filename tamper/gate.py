@@ -19,15 +19,27 @@ import cv2
 
 from .ingest import Context
 
-# Words that appear on Indian KYC documents.
+# Words that appear on the supported Indian KYC documents:
+# Aadhaar, PAN, Driving Licence, Passport.
 KYC_KEYWORDS = [
+    # Aadhaar
     "aadhaar", "aadhar", "government of india", "unique identification",
-    "uidai", "vid", "income tax department", "permanent account",
+    "uidai", "vid",
+    # PAN
+    "income tax department", "permanent account", "permanent account number",
+    # Driving Licence
     "driving licence", "driving license", "transport department",
+    "motor vehicle", "licence to drive",
+    # Passport
+    "passport", "republic of india", "nationality", "place of issue",
+    "place of birth", "date of issue", "date of expiry", "passport no",
+    # Common
     "date of birth", "year of birth",
 ]
 _AADHAAR_RE = re.compile(r"\b\d{4}\s?\d{4}\s?\d{4}\b")
 _PAN_RE = re.compile(r"\b[A-Z]{5}[0-9]{4}[A-Z]\b")
+# Indian passport: one letter followed by 7 digits (e.g. A1234567).
+_PASSPORT_RE = re.compile(r"\b[A-PR-WYa-pr-wy][0-9]{7}\b")
 
 
 def _ocr_text(ctx: Context) -> str | None:
@@ -56,7 +68,8 @@ def looks_like_kyc(ctx: Context) -> tuple[str, str]:
     low = text.lower()
     if any(k in low for k in KYC_KEYWORDS):
         return "kyc", "KYC keywords found in document text"
-    if _AADHAAR_RE.search(text) or _PAN_RE.search(text.upper()):
-        return "kyc", "an Aadhaar/PAN-style identifier was found"
+    if (_AADHAAR_RE.search(text) or _PAN_RE.search(text.upper())
+            or _PASSPORT_RE.search(text)):
+        return "kyc", "an Aadhaar/PAN/Passport-style identifier was found"
 
-    return "not_kyc", "no Aadhaar/PAN/Driving-Licence markers detected"
+    return "not_kyc", "no Aadhaar / PAN / Driving-Licence / Passport markers detected"

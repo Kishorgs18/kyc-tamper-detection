@@ -42,6 +42,8 @@ _P = [
 _PAN_RE = re.compile(r"^[A-Z]{5}[0-9]{4}[A-Z]$")
 # 4th char of a PAN encodes holder type (P=individual, C=company, etc.)
 _PAN_ENTITY_TYPES = set("ABCFGHLJPTK")
+# Indian passport: one letter (excluding easily-confused I/O/Q) + 7 digits.
+_PASSPORT_RE = re.compile(r"^[A-PR-WY][0-9]{7}$")
 
 
 def verhoeff_valid(number: str) -> bool:
@@ -100,6 +102,17 @@ def run(ctx: Context) -> DetectorResult:
                 detector=NAME, code="PAN_ENTITY_CHAR_SUSPECT", severity=Severity.SOFT,
                 explanation=f"PAN 4th character '{pan[3]}' is not a known holder type.",
                 score=0.5,
+            ))
+
+    # --- Passport: structural pattern ------------------------------------
+    passport = str(f.get("passport", "")).strip().upper()
+    if passport:
+        if not _PASSPORT_RE.match(passport):
+            findings.append(Finding(
+                detector=NAME, code="PASSPORT_FORMAT_INVALID", severity=Severity.HARD,
+                explanation="Passport number does not match the expected "
+                            "1-letter + 7-digit format (e.g. A1234567).",
+                score=0.8,
             ))
 
     # --- Date of birth: must be a valid, plausible past date -------------

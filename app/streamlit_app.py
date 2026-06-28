@@ -50,9 +50,12 @@ with st.sidebar:
     st.divider()
     st.header("Document fields (from OCR)")
     st.caption("Type the values your OCR extracted, or leave blank.")
-    doc_type = st.selectbox("Document type", ["auto", "aadhaar", "pan", "dl"])
+    doc_type = st.selectbox(
+        "Document type", ["auto", "aadhaar", "pan", "dl", "passport"]
+    )
     aadhaar = st.text_input("Aadhaar number")
     pan = st.text_input("PAN")
+    passport = st.text_input("Passport number")
     dob = st.text_input("Date of birth (dd/mm/yyyy)")
     name = st.text_input("Name")
     age = st.text_input("Age (optional)")
@@ -74,7 +77,8 @@ else:
 if raw is not None:
     ocr_fields = {
         k: v for k, v in {
-            "aadhaar": aadhaar, "pan": pan, "dob": dob, "name": name, "age": age,
+            "aadhaar": aadhaar, "pan": pan, "passport": passport,
+            "dob": dob, "name": name, "age": age,
         }.items() if v
     }
     # For built-in samples, prefill plausible OCR values if the user left the
