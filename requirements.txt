@@ -1,0 +1,10 @@
+streamlit>=1.36
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pillow>=10.0
+opencv-python-headless>=4.9
+numpy>=1.26
+python-multipart>=0.0.9
+pydantic>=2.6
+# Optional OCR fallback for the demo (the real system uses your existing OCR):
+#   pytesseract>=0.3.10   (also needs the `tesseract` binary installed)

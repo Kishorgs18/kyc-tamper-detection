@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+.DS_Store
+# Never commit document data
+data/uploads/*
+data/store/*
+!data/uploads/.gitkeep
+!data/store/.gitkeep
+.pytest_cache/

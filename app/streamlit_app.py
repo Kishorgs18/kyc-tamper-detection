@@ -1,0 +1,116 @@
+"""Streamlit demo — upload a KYC document, see the tamper analysis.
+
+Run:  streamlit run app/streamlit_app.py
+
+OCR fields can be typed in manually (the production system feeds them from your
+existing OCR). An optional pytesseract auto-extract is offered if installed.
+"""
+from __future__ import annotations
+
+import base64
+import sys
+from io import BytesIO
+from pathlib import Path
+
+import streamlit as st
+from PIL import Image
+
+# Make the package importable when run via `streamlit run`.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from tamper.models import Decision  # noqa: E402
+from tamper.pipeline import analyze  # noqa: E402
+
+_DECISION_STYLE = {
+    Decision.CLEAR: ("✅ GENUINE / CLEAR", "#1a7f37"),
+    Decision.REVIEW: ("⚠️ SUSPICIOUS / REVIEW", "#9a6700"),
+    Decision.HOLD: ("⛔ TAMPERED / HOLD", "#cf222e"),
+}
+
+
+def _b64_to_image(b64: str) -> Image.Image:
+    return Image.open(BytesIO(base64.b64decode(b64)))
+
+
+st.set_page_config(page_title="KYC Tamper Detection", layout="wide")
+st.title("🛡️ KYC Document Tamper Detection")
+st.caption(
+    "Forensic flagger — assists human reviewers. Indicative scores only; "
+    "not a certified automated decision system. Runs fully locally."
+)
+
+with st.sidebar:
+    st.header("Document fields (from OCR)")
+    st.caption("Type the values your OCR extracted, or leave blank.")
+    doc_type = st.selectbox("Document type", ["auto", "aadhaar", "pan", "dl"])
+    aadhaar = st.text_input("Aadhaar number")
+    pan = st.text_input("PAN")
+    dob = st.text_input("Date of birth (dd/mm/yyyy)")
+    name = st.text_input("Name")
+    age = st.text_input("Age (optional)")
+
+uploaded = st.file_uploader(
+    "Upload a KYC document image", type=["jpg", "jpeg", "png", "webp", "bmp"]
+)
+
+if uploaded is not None:
+    raw = uploaded.getvalue()
+
+    ocr_fields = {
+        k: v for k, v in {
+            "aadhaar": aadhaar, "pan": pan, "dob": dob, "name": name, "age": age,
+        }.items() if v
+    }
+
+    with st.spinner("Running forensic detectors…"):
+        result = analyze(
+            raw,
+            ocr_fields=ocr_fields,
+            doc_type=None if doc_type == "auto" else doc_type,
+            persist=True,
+        )
+
+    label, color = _DECISION_STYLE[result.decision]
+    st.markdown(
+        f"<h2 style='color:{color}'>{label}</h2>", unsafe_allow_html=True
+    )
+    c1, c2 = st.columns(2)
+    c1.metric("Indicative tamper score", f"{result.tamper_score} / 100")
+    c2.metric("Detected document type", result.doc_type or "unknown")
+    st.info(result.summary)
+
+    st.subheader("Findings")
+    if result.findings:
+        st.table([
+            {
+                "Severity": f.severity.value.upper(),
+                "Detector": f.detector,
+                "Code": f.code,
+                "Explanation": f.explanation,
+            }
+            for f in result.findings
+        ])
+    else:
+        st.success("No tamper indicators raised by any detector.")
+
+    st.subheader("Evidence")
+    cols = st.columns(2)
+    cols[0].image(Image.open(BytesIO(raw)), caption="Original", use_container_width=True)
+    i = 1
+    for detector, b64 in result.heatmaps.items():
+        cols[i % 2].image(
+            _b64_to_image(b64), caption=f"{detector} heatmap",
+            use_container_width=True,
+        )
+        i += 1
+
+    with st.expander("Masked stored record (privacy-preserving)"):
+        st.json({
+            "decision": result.decision.value,
+            "tamper_score": result.tamper_score,
+            "doc_type": result.doc_type,
+            "ocr_fields": result.ocr_fields,  # masked identifiers
+        })
+else:
+    st.write("⬆️ Upload a document to begin. Use the synthetic generator "
+             "(`scripts/make_synthetic.py`) to create demo samples.")
