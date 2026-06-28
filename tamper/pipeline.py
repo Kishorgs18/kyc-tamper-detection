@@ -10,8 +10,9 @@ from typing import Optional
 
 from .aggregator import aggregate
 from .detectors import ALL_DETECTORS
+from .gate import looks_like_kyc
 from .ingest import build_context
-from .models import AnalysisResult, DetectorResult, Finding, Severity
+from .models import AnalysisResult, Decision, DetectorResult, Finding, Severity
 from .report import build_report
 from .router import decide
 from .store import save_result
@@ -33,6 +34,22 @@ def analyze(
         source_text=source_text,
         doc_type=doc_type,
     )
+
+    # Front gate: only analyse actual KYC documents. A non-KYC image (e.g. a
+    # random photo) is reported as UNSUPPORTED rather than given a tamper score.
+    status, reason = looks_like_kyc(ctx)
+    if status == "not_kyc":
+        return AnalysisResult(
+            decision=Decision.UNSUPPORTED,
+            tamper_score=0,
+            doc_type=None,
+            findings=[],
+            heatmaps={},
+            ocr_fields={},
+            summary="This image does not appear to be a supported KYC document "
+                    f"(Aadhaar / PAN / Driving Licence): {reason}. "
+                    "Tamper analysis was skipped.",
+        )
 
     results: list[DetectorResult] = []
     for module in ALL_DETECTORS:

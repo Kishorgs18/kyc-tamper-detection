@@ -25,6 +25,7 @@ _DECISION_STYLE = {
     Decision.CLEAR: ("✅ GENUINE / CLEAR", "#1a7f37"),
     Decision.REVIEW: ("⚠️ SUSPICIOUS / REVIEW", "#9a6700"),
     Decision.HOLD: ("⛔ TAMPERED / HOLD", "#cf222e"),
+    Decision.UNSUPPORTED: ("🚫 NOT A KYC DOCUMENT", "#6e7781"),
 }
 
 
@@ -98,13 +99,27 @@ if raw is not None:
     st.markdown(
         f"<h2 style='color:{color}'>{label}</h2>", unsafe_allow_html=True
     )
+
+    if result.decision == Decision.UNSUPPORTED:
+        # Not a KYC document — show the original and the reason, then stop.
+        st.warning(result.summary)
+        st.image(Image.open(BytesIO(raw)), caption="Uploaded image",
+                 use_container_width=True)
+        st.stop()
+
     c1, c2 = st.columns(2)
     c1.metric("Indicative tamper score", f"{result.tamper_score} / 100")
     c2.metric("Detected document type", result.doc_type or "unknown")
     st.info(result.summary)
 
+    # Show actionable findings (SOFT/HARD) prominently; keep INFO context muted
+    # so neutral notes (e.g. "no camera metadata" on WhatsApp images) don't read
+    # as tamper flags.
+    actionable = [f for f in result.findings if f.severity.value != "info"]
+    info_notes = [f for f in result.findings if f.severity.value == "info"]
+
     st.subheader("Findings")
-    if result.findings:
+    if actionable:
         st.table([
             {
                 "Severity": f.severity.value.upper(),
@@ -112,10 +127,15 @@ if raw is not None:
                 "Code": f.code,
                 "Explanation": f.explanation,
             }
-            for f in result.findings
+            for f in actionable
         ])
     else:
         st.success("No tamper indicators raised by any detector.")
+
+    if info_notes:
+        with st.expander(f"Context notes ({len(info_notes)}) — not tamper flags"):
+            for f in info_notes:
+                st.caption(f"• {f.explanation}")
 
     st.subheader("Evidence")
     cols = st.columns(2)

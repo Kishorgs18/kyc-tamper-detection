@@ -21,6 +21,7 @@ class Decision(str, Enum):
     CLEAR = "CLEAR"     # no findings; auto-pass candidate
     REVIEW = "REVIEW"   # soft findings; route to human reviewer
     HOLD = "HOLD"       # hard findings; escalate / block pending review
+    UNSUPPORTED = "UNSUPPORTED"  # not a recognizable KYC document; not analyzed
 
 
 class Region(BaseModel):
