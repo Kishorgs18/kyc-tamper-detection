@@ -57,6 +57,11 @@ def analyze(
     )
 
     if persist:
-        save_result(report, raw_bytes=raw_bytes)
+        # Persistence is best-effort: a read-only/ephemeral cloud filesystem
+        # must never crash the analysis.
+        try:
+            save_result(report, raw_bytes=raw_bytes)
+        except Exception:
+            pass
 
     return report
