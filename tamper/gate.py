@@ -21,30 +21,46 @@ from .ingest import Context
 
 # Words that appear on the supported Indian KYC documents:
 # Aadhaar, PAN, Driving Licence, Passport.
+# Keywords are matched loosely (substring, case-insensitive) AND against a
+# space-stripped copy of the text, so noisy OCR like "INCOME  TAX" or
+# "PERMANENTACCOUNT" still hits. Short, high-signal fragments are included on
+# purpose to tolerate imperfect OCR on real phone photos.
 KYC_KEYWORDS = [
     # Aadhaar
-    "aadhaar", "aadhar", "government of india", "unique identification",
-    "uidai", "vid",
+    "aadhaar", "aadhar", "government of india", "govt of india",
+    "unique identification", "uidai", "vid",
     # PAN
-    "income tax department", "permanent account", "permanent account number",
+    "income tax", "incometax", "tax department", "permanent account",
+    "permanent account number", "account number",
     # Driving Licence
-    "driving licence", "driving license", "transport department",
-    "motor vehicle", "licence to drive",
+    "driving licence", "driving license", "driving", "licence", "license",
+    "transport", "motor vehicle",
     # Passport
     "passport", "republic of india", "nationality", "place of issue",
-    "place of birth", "date of issue", "date of expiry", "passport no",
+    "place of birth", "date of issue", "date of expiry",
     # Voter ID (EPIC)
-    "election commission", "election commission of india", "elector",
-    "electoral", "epic", "voter",
+    "election commission", "elector", "electoral", "epic",
     # Common
-    "date of birth", "year of birth",
+    "date of birth", "year of birth", "father", "husband",
 ]
-_AADHAAR_RE = re.compile(r"\b\d{4}\s?\d{4}\s?\d{4}\b")
-_PAN_RE = re.compile(r"\b[A-Z]{5}[0-9]{4}[A-Z]\b")
+_AADHAAR_RE = re.compile(r"\d{4}\s?\d{4}\s?\d{4}")
+_PAN_RE = re.compile(r"[A-Z]{5}\s?[0-9]{4}\s?[A-Z]")
 # Indian passport: one letter followed by 7 digits (e.g. A1234567).
-_PASSPORT_RE = re.compile(r"\b[A-PR-WYa-pr-wy][0-9]{7}\b")
+_PASSPORT_RE = re.compile(r"\b[A-PR-WYa-pr-wy]\s?[0-9]{7}\b")
 # Voter ID / EPIC: three letters followed by 7 digits (e.g. ABC1234567).
-_VOTER_RE = re.compile(r"\b[A-Za-z]{3}[0-9]{7}\b")
+_VOTER_RE = re.compile(r"\b[A-Za-z]{3}\s?[0-9]{7}\b")
+
+
+def _preprocess_for_ocr(cv_image):
+    """Grayscale + upscale small images so tesseract reads phone photos better."""
+    gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
+    h, w = gray.shape[:2]
+    longest = max(h, w)
+    if longest < 1600:                       # upscale low-res uploads
+        scale = 1600.0 / longest
+        gray = cv2.resize(gray, None, fx=scale, fy=scale,
+                          interpolation=cv2.INTER_CUBIC)
+    return gray
 
 
 def _ocr_text(ctx: Context) -> str | None:
@@ -53,8 +69,8 @@ def _ocr_text(ctx: Context) -> str | None:
         import pytesseract  # noqa: PLC0415
         from PIL import Image  # noqa: PLC0415
 
-        rgb = cv2.cvtColor(ctx.cv_image, cv2.COLOR_BGR2RGB)
-        return pytesseract.image_to_string(Image.fromarray(rgb))
+        gray = _preprocess_for_ocr(ctx.cv_image)
+        return pytesseract.image_to_string(Image.fromarray(gray))
     except Exception:
         return None
 
@@ -71,10 +87,16 @@ def looks_like_kyc(ctx: Context) -> tuple[str, str]:
         return "unknown", "OCR unavailable; proceeding without a document gate"
 
     low = text.lower()
-    if any(k in low for k in KYC_KEYWORDS):
+    low_nospace = re.sub(r"\s+", "", low)
+    if any(k in low or k.replace(" ", "") in low_nospace for k in KYC_KEYWORDS):
         return "kyc", "KYC keywords found in document text"
-    if (_AADHAAR_RE.search(text) or _PAN_RE.search(text.upper())
-            or _PASSPORT_RE.search(text) or _VOTER_RE.search(text)):
+
+    # Match identifier patterns on a space-collapsed copy (OCR adds stray gaps).
+    up = text.upper()
+    up_nospace = re.sub(r"\s+", "", up)
+    if (_AADHAAR_RE.search(up) or _AADHAAR_RE.search(up_nospace)
+            or _PAN_RE.search(up) or _PAN_RE.search(up_nospace)
+            or _PASSPORT_RE.search(up) or _VOTER_RE.search(up)):
         return "kyc", "an Aadhaar/PAN/Passport/Voter-ID-style identifier was found"
 
     return ("not_kyc",
