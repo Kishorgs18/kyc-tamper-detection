@@ -33,6 +33,9 @@ KYC_KEYWORDS = [
     # Passport
     "passport", "republic of india", "nationality", "place of issue",
     "place of birth", "date of issue", "date of expiry", "passport no",
+    # Voter ID (EPIC)
+    "election commission", "election commission of india", "elector",
+    "electoral", "epic", "voter",
     # Common
     "date of birth", "year of birth",
 ]
@@ -40,6 +43,8 @@ _AADHAAR_RE = re.compile(r"\b\d{4}\s?\d{4}\s?\d{4}\b")
 _PAN_RE = re.compile(r"\b[A-Z]{5}[0-9]{4}[A-Z]\b")
 # Indian passport: one letter followed by 7 digits (e.g. A1234567).
 _PASSPORT_RE = re.compile(r"\b[A-PR-WYa-pr-wy][0-9]{7}\b")
+# Voter ID / EPIC: three letters followed by 7 digits (e.g. ABC1234567).
+_VOTER_RE = re.compile(r"\b[A-Za-z]{3}[0-9]{7}\b")
 
 
 def _ocr_text(ctx: Context) -> str | None:
@@ -69,7 +74,8 @@ def looks_like_kyc(ctx: Context) -> tuple[str, str]:
     if any(k in low for k in KYC_KEYWORDS):
         return "kyc", "KYC keywords found in document text"
     if (_AADHAAR_RE.search(text) or _PAN_RE.search(text.upper())
-            or _PASSPORT_RE.search(text)):
-        return "kyc", "an Aadhaar/PAN/Passport-style identifier was found"
+            or _PASSPORT_RE.search(text) or _VOTER_RE.search(text)):
+        return "kyc", "an Aadhaar/PAN/Passport/Voter-ID-style identifier was found"
 
-    return "not_kyc", "no Aadhaar / PAN / Driving-Licence / Passport markers detected"
+    return ("not_kyc",
+            "no Aadhaar / PAN / Driving-Licence / Passport / Voter-ID markers detected")

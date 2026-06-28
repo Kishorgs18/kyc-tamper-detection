@@ -44,6 +44,8 @@ _PAN_RE = re.compile(r"^[A-Z]{5}[0-9]{4}[A-Z]$")
 _PAN_ENTITY_TYPES = set("ABCFGHLJPTK")
 # Indian passport: one letter (excluding easily-confused I/O/Q) + 7 digits.
 _PASSPORT_RE = re.compile(r"^[A-PR-WY][0-9]{7}$")
+# Voter ID / EPIC: three letters + 7 digits (e.g. ABC1234567).
+_VOTER_RE = re.compile(r"^[A-Z]{3}[0-9]{7}$")
 
 
 def verhoeff_valid(number: str) -> bool:
@@ -112,6 +114,17 @@ def run(ctx: Context) -> DetectorResult:
                 detector=NAME, code="PASSPORT_FORMAT_INVALID", severity=Severity.HARD,
                 explanation="Passport number does not match the expected "
                             "1-letter + 7-digit format (e.g. A1234567).",
+                score=0.8,
+            ))
+
+    # --- Voter ID (EPIC): structural pattern -----------------------------
+    voter = str(f.get("voter", "")).strip().upper()
+    if voter:
+        if not _VOTER_RE.match(voter):
+            findings.append(Finding(
+                detector=NAME, code="VOTER_FORMAT_INVALID", severity=Severity.HARD,
+                explanation="Voter ID (EPIC) does not match the expected "
+                            "3-letter + 7-digit format (e.g. ABC1234567).",
                 score=0.8,
             ))
 

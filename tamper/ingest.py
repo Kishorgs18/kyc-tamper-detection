@@ -24,6 +24,8 @@ _PAN_RE = re.compile(r"\b[A-Z]{5}[0-9]{4}[A-Z]\b")
 _DL_HINT_RE = re.compile(r"driving|licence|license|\bDL\b", re.IGNORECASE)
 _PASSPORT_HINT_RE = re.compile(r"passport|republic of india|nationality",
                                re.IGNORECASE)
+_VOTER_HINT_RE = re.compile(r"election commission|elector|electoral|\bepic\b|voter",
+                            re.IGNORECASE)
 
 
 @dataclass
@@ -46,6 +48,8 @@ def infer_doc_type(text: str, fields: dict) -> Optional[str]:
         return "pan"
     if fields.get("passport") or _PASSPORT_HINT_RE.search(text or ""):
         return "passport"
+    if fields.get("voter") or _VOTER_HINT_RE.search(text or ""):
+        return "voter"
     if fields.get("dl") or _DL_HINT_RE.search(text or ""):
         return "dl"
     return None
