@@ -40,6 +40,13 @@ st.caption(
 )
 
 with st.sidebar:
+    st.header("Input")
+    sample_choice = st.radio(
+        "Document source",
+        ["Upload my own", "Built-in genuine sample", "Built-in tampered sample"],
+        help="Built-in samples are synthetic demo cards — no real personal data.",
+    )
+    st.divider()
     st.header("Document fields (from OCR)")
     st.caption("Type the values your OCR extracted, or leave blank.")
     doc_type = st.selectbox("Document type", ["auto", "aadhaar", "pan", "dl"])
@@ -49,18 +56,35 @@ with st.sidebar:
     name = st.text_input("Name")
     age = st.text_input("Age (optional)")
 
-uploaded = st.file_uploader(
-    "Upload a KYC document image", type=["jpg", "jpeg", "png", "webp", "bmp"]
-)
+raw = None
+if sample_choice == "Upload my own":
+    uploaded = st.file_uploader(
+        "Upload a KYC document image", type=["jpg", "jpeg", "png", "webp", "bmp"]
+    )
+    if uploaded is not None:
+        raw = uploaded.getvalue()
+else:
+    sample_file = "genuine.png" if "genuine" in sample_choice else "tampered.png"
+    sample_path = Path(__file__).resolve().parent.parent / "samples" / sample_file
+    raw = sample_path.read_bytes() if sample_path.exists() else None
+    if raw is None:
+        st.error(f"Sample not found: {sample_path}")
 
-if uploaded is not None:
-    raw = uploaded.getvalue()
-
+if raw is not None:
     ocr_fields = {
         k: v for k, v in {
             "aadhaar": aadhaar, "pan": pan, "dob": dob, "name": name, "age": age,
         }.items() if v
     }
+    # For built-in samples, prefill plausible OCR values if the user left the
+    # fields blank, so the field-level checks (Verhoeff checksum etc.) are shown
+    # too — not just the image forensics.
+    if not ocr_fields and sample_choice != "Upload my own":
+        ocr_fields = (
+            {"aadhaar": "2345 6789 0124", "dob": "14/03/1990"}
+            if "genuine" in sample_choice
+            else {"aadhaar": "1234 5678 9012", "dob": "01/01/1980"}
+        )
 
     with st.spinner("Running forensic detectors…"):
         result = analyze(
@@ -112,5 +136,5 @@ if uploaded is not None:
             "ocr_fields": result.ocr_fields,  # masked identifiers
         })
 else:
-    st.write("⬆️ Upload a document to begin. Use the synthetic generator "
-             "(`scripts/make_synthetic.py`) to create demo samples.")
+    st.write("⬆️ Upload a document, or pick a **built-in sample** in the "
+             "sidebar to begin.")
