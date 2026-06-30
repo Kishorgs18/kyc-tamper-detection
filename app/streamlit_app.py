@@ -8,6 +8,7 @@ existing OCR). An optional pytesseract auto-extract is offered if installed.
 from __future__ import annotations
 
 import base64
+import hashlib
 import sys
 from io import BytesIO
 from pathlib import Path
@@ -79,8 +80,15 @@ if raw is not None:
             else {"aadhaar": "1234 5678 9012", "dob": "01/01/1980"}
         )
 
-    with st.spinner("Running forensic detectors…"):
-        result = analyze(raw, ocr_fields=ocr_fields, persist=True)
+    # Cache the result by image hash so clicking a verdict button (which reruns
+    # the script) does NOT re-run the analysis or create a duplicate record.
+    img_hash = hashlib.md5(raw).hexdigest()
+    if st.session_state.get("img_hash") != img_hash:
+        with st.spinner("Running forensic detectors…"):
+            st.session_state["result"] = analyze(raw, ocr_fields=ocr_fields, persist=True)
+        st.session_state["img_hash"] = img_hash
+        st.session_state["verdict_done"] = False
+    result = st.session_state["result"]
 
     label, color = _DECISION_STYLE[result.decision]
     st.markdown(
@@ -142,6 +150,36 @@ if raw is not None:
             "doc_type": result.doc_type,
             "ocr_fields": result.ocr_fields,  # masked identifiers
         })
+
+    # --- Verdict capture: turns each test into a labelled training example ---
+    st.divider()
+    st.subheader("🏷️ Help improve accuracy")
+    st.caption(
+        "Tell us the ground truth for this document. It's stored (with masked "
+        "data) and used to tune the detectors — this is what turns the demo into "
+        "a learning system."
+    )
+    if st.session_state.get("verdict_done"):
+        st.success(f"Thanks! Recorded as **{st.session_state.get('verdict_label')}**.")
+    elif not result.record_id:
+        st.info("Verdict capture unavailable (the record wasn't stored).")
+    else:
+        vc1, vc2, vc3 = st.columns(3)
+        choice = None
+        if vc1.button("✅ Genuine", use_container_width=True):
+            choice = "genuine"
+        if vc2.button("⚠️ Suspicious", use_container_width=True):
+            choice = "suspicious"
+        if vc3.button("⛔ Tampered", use_container_width=True):
+            choice = "tampered"
+        if choice:
+            from tamper.store import attach_verdict
+            if attach_verdict(result.record_id, choice):
+                st.session_state["verdict_done"] = True
+                st.session_state["verdict_label"] = choice
+                st.rerun()
+            else:
+                st.error("Could not save the verdict.")
 else:
     st.write("⬆️ Upload a document, or pick a **built-in sample** in the "
              "sidebar to begin.")

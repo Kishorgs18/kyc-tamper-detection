@@ -87,7 +87,7 @@ def analyze(
         # Persistence is best-effort: a read-only/ephemeral cloud filesystem
         # must never crash the analysis.
         try:
-            save_result(report, raw_bytes=raw_bytes)
+            report.record_id = save_result(report, raw_bytes=raw_bytes)
         except Exception:
             pass
 

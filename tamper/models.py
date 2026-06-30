@@ -56,3 +56,4 @@ class AnalysisResult(BaseModel):
     heatmaps: dict[str, str] = Field(default_factory=dict)  # detector -> PNG b64
     ocr_fields: dict = Field(default_factory=dict)          # masked
     summary: str = ""
+    record_id: Optional[str] = None     # id of the stored record (for verdict capture)
