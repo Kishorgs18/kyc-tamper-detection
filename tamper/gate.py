@@ -99,5 +99,52 @@ def looks_like_kyc(ctx: Context) -> tuple[str, str]:
             or _PASSPORT_RE.search(up) or _VOTER_RE.search(up)):
         return "kyc", "an Aadhaar/PAN/Passport/Voter-ID-style identifier was found"
 
+    # Fail open: real card photos often OCR poorly. Only reject when OCR clearly
+    # read a substantial NON-KYC text scene; otherwise proceed and analyse, so a
+    # genuine document is never wrongly rejected.
+    alnum = re.sub(r"[^a-z0-9]", "", low)
+    if len(alnum) < 40:
+        return "unknown", "OCR could not read enough text to classify; analysing anyway"
     return ("not_kyc",
-            "no Aadhaar / PAN / Driving-Licence / Passport / Voter-ID markers detected")
+            "substantial text read but no Aadhaar / PAN / DL / Passport / Voter-ID markers")
+
+
+def extract_ocr_fields(ctx: Context) -> tuple[dict, str | None]:
+    """OCR the image, infer the document type, and pull out its identifier.
+
+    Lets the app auto-fill fields (for the Verhoeff/format checks) without the
+    user typing anything. Returns ({}, None) if OCR is unavailable.
+    """
+    text = _ocr_text(ctx)
+    if not text:
+        return {}, None
+    low = text.lower()
+    up_nospace = re.sub(r"\s+", "", text.upper())
+
+    if any(k in low for k in ("aadhaar", "aadhar", "uidai", "unique identification",
+                              "govt of india", "government of india")):
+        doc_type = "aadhaar"
+    elif any(k in low for k in ("income tax", "incometax", "permanent account")):
+        doc_type = "pan"
+    elif any(k in low for k in ("passport", "republic of india")):
+        doc_type = "passport"
+    elif any(k in low for k in ("election", "elector", "electoral", "epic")):
+        doc_type = "voter"
+    elif any(k in low for k in ("driving", "licence", "license", "transport")):
+        doc_type = "dl"
+    else:
+        doc_type = None
+
+    fields: dict = {}
+    patterns = {"aadhaar": _AADHAAR_RE, "pan": _PAN_RE,
+                "passport": _PASSPORT_RE, "voter": _VOTER_RE}
+    if doc_type in patterns:
+        m = patterns[doc_type].search(up_nospace)
+        if m:
+            fields[doc_type] = m.group()
+    elif doc_type is None:
+        m = _AADHAAR_RE.search(up_nospace)   # a bare 12-digit number ⇒ Aadhaar
+        if m:
+            fields["aadhaar"] = m.group()
+            doc_type = "aadhaar"
+    return fields, doc_type

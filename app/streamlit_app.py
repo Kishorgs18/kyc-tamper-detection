@@ -48,18 +48,10 @@ with st.sidebar:
         help="Built-in samples are synthetic demo cards — no real personal data.",
     )
     st.divider()
-    st.header("Document fields (from OCR)")
-    st.caption("Type the values your OCR extracted, or leave blank.")
-    doc_type = st.selectbox(
-        "Document type", ["auto", "aadhaar", "pan", "dl", "passport", "voter"]
+    st.caption(
+        "Upload a KYC document — Aadhaar, PAN, Driving Licence, Passport or "
+        "Voter ID. The document type and ID number are detected automatically."
     )
-    aadhaar = st.text_input("Aadhaar number")
-    pan = st.text_input("PAN")
-    passport = st.text_input("Passport number")
-    voter = st.text_input("Voter ID (EPIC) number")
-    dob = st.text_input("Date of birth (dd/mm/yyyy)")
-    name = st.text_input("Name")
-    age = st.text_input("Age (optional)")
 
 raw = None
 if sample_choice == "Upload my own":
@@ -76,16 +68,11 @@ else:
         st.error(f"Sample not found: {sample_path}")
 
 if raw is not None:
-    ocr_fields = {
-        k: v for k, v in {
-            "aadhaar": aadhaar, "pan": pan, "passport": passport, "voter": voter,
-            "dob": dob, "name": name, "age": age,
-        }.items() if v
-    }
-    # For built-in samples, prefill plausible OCR values if the user left the
-    # fields blank, so the field-level checks (Verhoeff checksum etc.) are shown
-    # too — not just the image forensics.
-    if not ocr_fields and sample_choice != "Upload my own":
+    # Built-in samples prefill plausible OCR values so the field-level checks
+    # (Verhoeff checksum etc.) are demonstrated; for real uploads the pipeline
+    # auto-detects the document type and ID number via OCR.
+    ocr_fields = None
+    if sample_choice != "Upload my own":
         ocr_fields = (
             {"aadhaar": "2345 6789 0124", "dob": "14/03/1990"}
             if "genuine" in sample_choice
@@ -93,12 +80,7 @@ if raw is not None:
         )
 
     with st.spinner("Running forensic detectors…"):
-        result = analyze(
-            raw,
-            ocr_fields=ocr_fields,
-            doc_type=None if doc_type == "auto" else doc_type,
-            persist=True,
-        )
+        result = analyze(raw, ocr_fields=ocr_fields, persist=True)
 
     label, color = _DECISION_STYLE[result.decision]
     st.markdown(

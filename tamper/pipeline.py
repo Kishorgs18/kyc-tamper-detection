@@ -10,7 +10,7 @@ from typing import Optional
 
 from .aggregator import aggregate
 from .detectors import ALL_DETECTORS
-from .gate import looks_like_kyc
+from .gate import extract_ocr_fields, looks_like_kyc
 from .ingest import build_context
 from .models import AnalysisResult, Decision, DetectorResult, Finding, Severity
 from .report import build_report
@@ -35,8 +35,18 @@ def analyze(
         doc_type=doc_type,
     )
 
-    # Front gate: only analyse actual KYC documents. A non-KYC image (e.g. a
-    # random photo) is reported as UNSUPPORTED rather than given a tamper score.
+    # Auto-extract the document type + identifier via OCR when the caller did not
+    # supply them, so the semantic (checksum/format) checks can run without the
+    # user typing anything.
+    if not ctx.ocr_fields and not ctx.doc_type:
+        found, found_type = extract_ocr_fields(ctx)
+        if found:
+            ctx.ocr_fields = found
+        if found_type:
+            ctx.doc_type = found_type
+
+    # Front gate: only block clear non-KYC images (e.g. a selfie). Real document
+    # photos that OCR can't read cleanly are analysed anyway (fail-open).
     status, reason = looks_like_kyc(ctx)
     if status == "not_kyc":
         return AnalysisResult(

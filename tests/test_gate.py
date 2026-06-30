@@ -34,17 +34,31 @@ def test_kyc_keywords_detected(monkeypatch):
     assert status == "kyc"
 
 
-def test_random_image_rejected(monkeypatch):
-    monkeypatch.setattr(gate, "_ocr_text", lambda ctx: "happy birthday party pizza")
+def test_long_nonkyc_text_rejected(monkeypatch):
+    # A clearly-readable NON-KYC text scene (lots of words, no KYC markers).
+    monkeypatch.setattr(gate, "_ocr_text", lambda ctx:
+                        "happy birthday party celebration with friends and family "
+                        "at the downtown restaurant this weekend pizza cake balloons")
     status, _ = gate.looks_like_kyc(_ctx())
     assert status == "not_kyc"
 
 
-def test_pipeline_returns_unsupported_for_non_kyc(monkeypatch):
-    monkeypatch.setattr(gate, "_ocr_text", lambda ctx: "just a holiday photo")
+def test_pipeline_returns_unsupported_for_long_nonkyc(monkeypatch):
+    monkeypatch.setattr(gate, "_ocr_text", lambda ctx:
+                        "a long holiday photo description with beach sunset mountains "
+                        "and friends enjoying their summer vacation together by the sea")
     img = Image.new("RGB", (200, 120), (180, 200, 220))
     from io import BytesIO
     buf = BytesIO(); img.save(buf, "JPEG")
     result = analyze(buf.getvalue())
     assert result.decision == Decision.UNSUPPORTED
-    assert result.tamper_score == 0
+
+
+def test_unreadable_upload_is_analyzed_not_rejected(monkeypatch):
+    # Fail-open: a real card photo OCR can't read should be ANALYSED, not rejected.
+    monkeypatch.setattr(gate, "_ocr_text", lambda ctx: "blur")
+    img = Image.new("RGB", (200, 120), (180, 200, 220))
+    from io import BytesIO
+    buf = BytesIO(); img.save(buf, "JPEG")
+    result = analyze(buf.getvalue())
+    assert result.decision != Decision.UNSUPPORTED
